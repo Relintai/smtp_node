@@ -54,6 +54,7 @@ func _thread_deliver(user_data):
 	
 	var r_code : int
 	r_code = open_socket()
+	
 	if r_code == OK:
 		r_code = wait_answer()
 #	if r_code == OK:
@@ -115,7 +116,31 @@ func open_socket():
 			break
 			
 		OS.delay_msec(delay_time)
+	
+	if auth_type == AuthType.SMTPS:
+		_socket_original = _socket
 		
+		_socket = StreamPeerSSL.new()
+		_socket.connect_to_stream(_socket_original, true, server)
+			
+		for i in range(max_retries):
+			print("TLS RETRIES" + str(_socket.get_status()))
+			
+			if _socket.get_status() == _socket.STATUS_ERROR:
+				display("Error while requesting connection")
+				return _socket.get_status()
+				
+	#		elif _socket.get_status() == _socket.STATUS_CONNECTING:
+	#			d.display("connecting...")
+	#			break
+		
+			if _socket.get_status() == _socket.STATUS_CONNECTED:
+				display("TLS connection up")
+				print("TLS CONNECTED")
+				break
+				
+			OS.delay_msec(delay_time)
+
 	return error
 
 func close_socket():
