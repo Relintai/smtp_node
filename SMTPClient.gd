@@ -8,18 +8,22 @@ enum SMTPStatus {
 }
 
 enum AuthType {
-	SMTPS,
-	STARTTLS,
-	PLAINTEXT,
+	SMTPS, # SMTPS server, connect, adn immediately just upgrade to use SSL
+	STARTTLS, # SMTP + STARTTLS server Connect, then upgrade to SSL using a command before auth
+	PLAINTEXT, # No SSL
 }
 
-export(String) var server : String = "smtp.gmail.com"
-export(int) var port : int = 465
+export(String) var smtp_server : String = ""
+export(int) var smtp_server_port : int = 465
+
 export(String) var user : String = ""
 export(String) var password : String = ""
-export(String) var email_address : String = ""
-export(String) var email_address_name : String = ""
-export(String) var client_address : String = "client.example.com"
+export(String) var sender_email_address : String = ""
+export(String) var sender_name : String = ""
+
+# This is sent to the SMTP server at login to id a client, can be anything
+export(String) var smtp_client_address : String = "client.example.com"
+
 export(int) var max_retries : int = 5
 export(int) var delay_time : int = 250
 export(AuthType) var auth_type : int = 0
@@ -69,7 +73,7 @@ func _thread_deliver(user_data):
 	if r_code == OK:
 		r_code = mail_auth()
 	if r_code == OK:
-		r_code = mail_from(email_address)
+		r_code = mail_from(sender_email_address)
 	if r_code == OK:
 		r_code = mail_to(address)
 	if r_code == OK:
@@ -91,13 +95,13 @@ func open_socket():
 
 	if _socket == null:
 		_socket = StreamPeerTCP.new()
-		error = _socket.connect_to_host(server,port)
+		error = _socket.connect_to_host(smtp_server, smtp_server_port)
 		
-	display(["connecting server...",server,error])
+	display(["connecting server...", smtp_server,error])
 
 	if error > 0:
-		var ip = IP.resolve_hostname(server)
-		error=_socket.connect_to_host(ip,port)
+		var ip = IP.resolve_hostname(smtp_server)
+		error=_socket.connect_to_host(ip, smtp_server_port)
 		display(["trying IP ...",ip,error])
 
 	for i in range(1, max_retries):
@@ -121,7 +125,7 @@ func open_socket():
 		_socket_original = _socket
 		
 		_socket = StreamPeerSSL.new()
-		_socket.connect_to_stream(_socket_original, true, server)
+		_socket.connect_to_stream(_socket_original, true, smtp_server)
 			
 		for i in range(max_retries):
 			print("TLS RETRIES" + str(_socket.get_status()))
@@ -224,9 +228,9 @@ func parse_packet_in(strcompare : String):
 			return FAILED
 
 func mail_hello():
-	var r_code : int = send("HELO", client_address)
+	var r_code : int = send("HELO", smtp_client_address)
 	wait_answer()
-	r_code= send("EHLO", client_address)
+	r_code= send("EHLO", smtp_client_address)
 	r_code= wait_answer("250")
 	return r_code
 
@@ -240,7 +244,7 @@ func mail_starttls():
 	_socket_original = _socket
 	
 	_socket = StreamPeerSSL.new()
-	_socket.connect_to_stream(_socket_original, true, server)
+	_socket.connect_to_stream(_socket_original, true, smtp_server)
 		
 	for i in range(max_retries):
 		print("STARTTLS RETRIES" + str(_socket.get_status()))
@@ -302,7 +306,7 @@ func mail_data(data=null,subject=null):
 	var r_code=send("DATA")
 	r_code=wait_answer("354")
 	if r_code == OK:
-		r_code=send("FROM: ", email_address_name + " " + bracket(email_address))
+		r_code=send("FROM: ", sender_name + " " + bracket(sender_email_address))
 		#r_code =wait_answer("250")
 	if r_code == OK and subject != null:
 		r_code=send("SUBJECT: ",subject)
