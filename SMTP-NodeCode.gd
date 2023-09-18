@@ -1,25 +1,16 @@
 extends Node
 
-## This looks like it was created by a CS student at a university graduation level,
-## there are many fantastic code snippets here, please try and mine as much of it as you can, as I have.
-
-# the debug function is quite smart.
-var debug = true
-func display(data):
-	if debug == true:
-		print("debug: ",data)
-
-export var server = "smtp.gmail.com" 		# you'll find info on the Gmail SMTP server at www.google.com :)
-export var port	= 465 	# standard SSL port
-export var user = ""	# put userid for SMTP login
-export var password = ""	# put password for SMTP login
-export var mymailto = ""	# put destination address
-export var mymail = "mail.smtp.localhost" 	# I found this at some random stackexchange thread
-
+export var server = "smtp.gmail.com" 
+export var port	= 465
+export var user = ""
+export var password = ""
+export var mymailto = ""
+export var mymail = "mail.smtp.localhost"
 
 enum channel {TCP,PACKET}
 export (channel) var com = channel.TCP
 
+var Bocket = null
 var Socket = null
 var PacketSocket = null
 var PacketIn = ""
@@ -37,13 +28,14 @@ var thread = null
 
 var authloginbase64=""
 var authpassbase64=""
+
 func _ready():
-	if user != "":		authloginbase64=Marshalls.raw_to_base64(user.to_ascii())
-	if password != "":	authpassbase64=Marshalls.raw_to_base64(password.to_ascii())
+	if user != "":
+		authloginbase64=Marshalls.raw_to_base64(user.to_ascii())
+	if password != "":
+		authpassbase64=Marshalls.raw_to_base64(password.to_ascii())
   
 
-
-# This is unbelievably useful. Try using ThreadDeliver without a thread for comparison
 func Deliver(data):
 	thread = Thread.new()
 	thread.start(self,"ThreadDeliver",data)
@@ -63,6 +55,8 @@ func ThreadDeliver(data):
 		r_code = MAILhello()
 	if r_code == OK:
 		print("SMTP_working")
+		CloseSocket()
+		return
 		r_code = MAILauth()
 	if r_code == OK:
 		r_code = MAILfrom(mymail)
@@ -79,15 +73,8 @@ func ThreadDeliver(data):
 		display("All done")
 	else:
 
-		display("ERROR")
+		display("ERROR " + str(r_code))
 	return r_code
-
-var Bocket = null
-# I added the variable Bocket, as a wrap around the Socket (originally called socket anyway), 
-# it's an SSL wrapper for Streampeers, I don't know much about these things, 
-# but you learn a lot by messing around with things.
-# I like creating silly names for variables, it keeps me motivated,
-# reminds me that creating code is my choice, to do how I please. 
 
 
 func OpenSocket():
@@ -95,7 +82,7 @@ func OpenSocket():
 
 	if Bocket == null:
 		Bocket=StreamPeerTCP.new()
-		error=Bocket.connect_to_host(server,port )		
+		error=Bocket.connect_to_host(server,port)
 		Socket = StreamPeerSSL.new()
 		Socket.connect_to_stream(Bocket, true, server)
 
@@ -107,7 +94,7 @@ func OpenSocket():
 		display(["trying IP ...",ip,error])
 
 	for i in range(1,MaxRetries):
-		print(Socket.get_status())
+		print("asdasd" + str(Socket.get_status()))
 		
 #		if Socket.get_status() == Socket.STATUS_ERROR:
 #			d.display("Error while requesting connection")
@@ -118,6 +105,7 @@ func OpenSocket():
 
 		if Socket.get_status() == Socket.STATUS_CONNECTED:
 			display("connection up")
+			print("CONNECTED")
 			break
 			
 		OS.delay_msec(delayTime)
@@ -244,3 +232,12 @@ func MAILquit():
 
 func bracket(data):
 	return "<"+data+">"
+
+
+func _on_Button_pressed() -> void:
+	Deliver("TEST MSG!")
+
+var debug = true
+func display(data):
+	if debug == true:
+		print("debug: ",data)
