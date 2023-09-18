@@ -1,4 +1,8 @@
-# Godot-SMTP-Gmail
+# SMTP Node
+
+Godot-SMTP-Gmail ported to work with the Pandemonium Engine.
+
+# Original README:
 
 This is an overhaul of an existing project by the username Burst (Last active 2018), with added SSL protection and port to Godot 3.2. You can find the original source code here https://godotforums.org/discussion/20317/smtp-client-script-sharing-with-you. I will also add the original code here for safekeeping and posterity.
 
@@ -15,3 +19,4 @@ I have added a few comments in the code, but please contact me for further expla
 
 
 Keywords for google (Maybe somebody needs to find this): SMTP Godot Mail Email Server send receive gmail TCP IP communication script client packets Godot mail smtp simple mail transfer protocol SSL TLS (your princess is in another castle) Exchange encryption Godot 3.2 godot 2.0 serial packetpeerstream streampeer streampeerssl streampeertcp thread socket port "auth login" helo ehlo 250 334 235
+
