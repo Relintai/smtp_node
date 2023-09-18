@@ -1,21 +1,21 @@
 extends Node
 
-export var server : String = "smtp.gmail.com" 
-export var port : int = 465
-export var user : String = ""
-export var password : String = ""
-export var max_retries : int = 5
-export var delay_time : int = 250
+export(String) var server : String = "smtp.gmail.com" 
+export(int) var port : int = 465
+export(String) var user : String = ""
+export(String) var password : String = ""
+export(int) var max_retries : int = 5
+export(int) var delay_time : int = 250
 
-export var mymailto = ""
-export var mymail = "mail.smtp.localhost"
+export(String) var mymailto : String = ""
+export(String) var mymail : String = "mail.smtp.localhost"
 
-var _socket_original = null
-var _socket = null
-var _packet_in = ""
-var _packet_out = ""
+var _socket_original : StreamPeer = null
+var _socket : StreamPeer = null
+var _packet_in : String = ""
+var _packet_out : String = ""
 
-var subject = "New message from Godot"
+var subject : String = "New message from Godot"
 
 enum SMTPStatus {
 	OK,
@@ -28,7 +28,7 @@ var _current_status : int = 0
 
 var thread : Thread = null
 
-var authloginbase64 : String  = ""
+var authloginbase64 : String = ""
 var authpassbase64 : String = ""
 
 func _ready():
@@ -43,7 +43,7 @@ func deliver(data):
 	thread.start(self,"thread_deliver",data)
 
 func thread_deliver(data):
-	var r_code
+	var r_code : int
 	r_code = Open_socket()
 	if r_code == OK:
 		r_code = wait_answer()
@@ -115,9 +115,7 @@ func close_socket():
 	_socket_original.disconnect_from_host()
 
 func send(data1,data2=null,data3=null):
-	var error
-	error = send_only(data1,data2,data3)
-	return error
+	return send_only(data1,data2,data3)
 
 func send_only(data1,data2=null,data3=null):
 	var error = 0
@@ -172,7 +170,7 @@ func parse_packet_in(strcompare):
 		return FAILED
 
 func mail_hello():
-	var r_code=send("HELO", mymail)
+	var r_code : int =send("HELO", mymail)
 	wait_answer()
 	r_code= send("EHLO", mymail)
 	r_code= wait_answer("250")
@@ -180,7 +178,7 @@ func mail_hello():
 
 # the mail_auth() function was broken, I fixed it, you're welcome
 func mail_auth():
-	var r_code=send("AUTH LOGIN")
+	var r_code : int =send("AUTH LOGIN")
 	r_code=wait_answer("334")
 	
 	#print("mail_auth()  , AUTH LOGIN ", r_code) 
@@ -210,7 +208,7 @@ func mail_to(data):
 	
 
 func mail_data(data=null,from=null,subject=null):
-	var corpo = ""
+	var corpo : String = ""
 	for i in data:
 		corpo = corpo + i  + "\r\n"
 	corpo=corpo + "."
