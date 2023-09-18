@@ -6,8 +6,8 @@ extends Node
 # the debug function is quite smart.
 var debug = true
 func display(data):
-  if debug == true:
-    print("debug: ",data)
+	if debug == true:
+		print("debug: ",data)
 
 export var server = "smtp.gmail.com" 		# you'll find info on the Gmail SMTP server at www.google.com :)
 export var port	= 465 	# standard SSL port
@@ -56,6 +56,9 @@ func ThreadDeliver(data):
 	r_code = OpenSocket()
 	if r_code == OK:
 		r_code =WaitAnswer()
+#	if r_code == OK:
+#		emit_signal("SMTP_connected")
+#		r_code = send("ciao") # needed because some SMTP servers return error each first command
 	if r_code == OK:
 		r_code = MAILhello()
 	if r_code == OK:
@@ -105,11 +108,20 @@ func OpenSocket():
 
 	for i in range(1,MaxRetries):
 		print(Socket.get_status())
+		
+#		if Socket.get_status() == Socket.STATUS_ERROR:
+#			d.display("Error while requesting connection")
+#			break
+#		elif Socket.get_status() == Socket.STATUS_CONNECTING:
+#			d.display("connecting...")
+#			break
 
 		if Socket.get_status() == Socket.STATUS_CONNECTED:
 			display("connection up")
 			break
+			
 		OS.delay_msec(delayTime)
+		
 	return error
 
 func CloseSocket():
@@ -185,7 +197,7 @@ func MAILauth():
 	r_code=WaitAnswer("334")
 	
 	#print("MAILauth()  , AUTH LOGIN ", r_code) 
-  # when debugging, add print statements everywhere you fail to progress.
+	# when debugging, add print statements everywhere you fail to progress.
 
 	if r_code == OK:
 		r_code=send(authloginbase64)
@@ -198,7 +210,6 @@ func MAILauth():
 	display(["r_code auth:", r_code])
 	return r_code
 
-
 func MAILfrom(data):
 	var r_code=send("MAIL FROM:",bracket(data))
 	r_code = WaitAnswer("250")
@@ -209,19 +220,18 @@ func MAILto(data):
 	r_code = WaitAnswer("250")
 	return r_code
 	
-var corpo = "Hello World!"
 var subject = "New message from Godot"
 
 
 func MAILdata(data=null,from=null,subject=null):
-
-	print(corpo)
+	var corpo = ""
 	for i in data:
-
 		corpo = corpo + i  + "\r\n"
-
+	corpo=corpo + "."
 	var r_code=send("DATA") 
 	r_code=WaitAnswer("354")
+#	if r_code == OK and from != null:
+#		r_code=send("FROM: ",bracket(from))
 	if r_code == OK and subject != null:
 		r_code=send("SUBJECT: ",subject)
 	if r_code == OK and data != null:
@@ -234,9 +244,3 @@ func MAILquit():
 
 func bracket(data):
 	return "<"+data+">"
-
-
-
-func _on_Button_pressed() -> void:
-	Deliver(".. ")
-	# I still haven't figured out how to send a message without an extra dot at the end of the message
