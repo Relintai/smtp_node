@@ -1,25 +1,33 @@
 extends Node
 
-export(String) var server : String = "smtp.gmail.com" 
-export(int) var port : int = 465
-export(String) var user : String = ""
-export(String) var password : String = ""
-export(String) var email_address : String = "mail.smtp.localhost"
-export(String) var client_address : String = "client.example.com"
-export(int) var max_retries : int = 5
-export(int) var delay_time : int = 250
-
-var _socket_original : StreamPeer = null
-var _socket : StreamPeer = null
-var _packet_in : String = ""
-var _packet_out : String = ""
-
 enum SMTPStatus {
 	OK,
 	WAITING,
 	NO_RESPONSE,
 	UNHANDLED_REPONSE
 }
+
+enum AuthType {
+	PLAINTEXT,
+	STARTTLS,
+	SMTPS
+}
+
+export(String) var server : String = "smtp.gmail.com"
+export(int) var port : int = 465
+export(String) var user : String = ""
+export(String) var password : String = ""
+export(String) var email_address : String = ""
+export(String) var email_address_name : String = ""
+export(String) var client_address : String = "client.example.com"
+export(int) var max_retries : int = 5
+export(int) var delay_time : int = 250
+export(AuthType) var auth_type : int = 0
+
+var _socket_original : StreamPeer = null
+var _socket : StreamPeer = null
+var _packet_in : String = ""
+var _packet_out : String = ""
 
 var _current_status : int = 0
 
@@ -48,24 +56,23 @@ func _thread_deliver(user_data):
 	r_code = open_socket()
 	if r_code == OK:
 		r_code = wait_answer()
-		
 #	if r_code == OK:
 #		emit_signal("SMTP_connected")
 #		r_code = send("ciao") # needed because some SMTP servers return error each first command
-
 	if r_code == OK:
 		r_code = mail_hello()
+	if r_code == OK && auth_type == AuthType.STARTTLS:
+		r_code = mail_starttls()
+		if r_code == OK:
+			r_code = mail_hello()
 	if r_code == OK:
-		print("SMTP_working")
-		close_socket()
-		return
 		r_code = mail_auth()
 	if r_code == OK:
-		r_code = mail_from(address)
+		r_code = mail_from(email_address)
 	if r_code == OK:
 		r_code = mail_to(address)
 	if r_code == OK:
-		r_code = mail_data(data, address, subject)
+		r_code = mail_data(data, subject)
 	if r_code == OK:
 		print("process OK")
 	if r_code == OK:
@@ -81,13 +88,10 @@ func _thread_deliver(user_data):
 func open_socket():
 	var error : int
 
-	if _socket_original == null:
-		_socket_original = StreamPeerTCP.new()
-		error = _socket_original.connect_to_host(server,port)
+	if _socket == null:
+		_socket = StreamPeerTCP.new()
+		error = _socket.connect_to_host(server,port)
 		
-		_socket = StreamPeerSSL.new()
-		_socket.connect_to_stream(_socket_original, true, server)
-
 	display(["connecting server...",server,error])
 
 	if error > 0:
@@ -95,7 +99,7 @@ func open_socket():
 		error=_socket.connect_to_host(ip,port)
 		display(["trying IP ...",ip,error])
 
-	for i in range(1,max_retries):
+	for i in range(1, max_retries):
 		print("RETRIES" + str(_socket.get_status()))
 		
 #		if _socket.get_status() == _socket.STATUS_ERROR:
@@ -115,7 +119,14 @@ func open_socket():
 	return error
 
 func close_socket():
-	_socket_original.disconnect_from_host()
+	if !_socket_original:
+		_socket.disconnect_from_host()
+	else:
+		_socket.disconnect_from_stream()
+		_socket_original.disconnect_from_host()
+		
+	_socket = null
+	_socket_original = null
 
 func send(data1,data2=null,data3=null):
 	return send_only(data1,data2,data3)
@@ -144,39 +155,86 @@ func wait_answer(succesful=""):
 
 	_packet_in = ""
 	OS.delay_msec(delay_time)
-	for i in range(1,max_retries):
-		_socket.poll()
-		var bufLen = _socket.get_available_bytes()
-		if bufLen > 0:
-			display(["bytes buffered",String(bufLen)])
-			_packet_in=_packet_in + _socket.get_utf8_string(bufLen)
+	for i in range(max_retries):
+		if _socket.has_method(@"poll"):
+			_socket.poll()
+			
+		var buf_len = _socket.get_available_bytes()
+		if buf_len > 0:
+			display(["bytes buffered",String(buf_len)])
+			_packet_in = _packet_in + _socket.get_utf8_string(buf_len)
 			display(["receive",_packet_in])
 			
 			break
 		else:
 			OS.delay_msec(delay_time)
+	
+	# This will likely need a rework
 	if _packet_in != "":
-		_current_status= SMTPStatus.OK
+		_current_status = SMTPStatus.OK
 		if parse_packet_in(succesful) != OK:
-			_current_status=SMTPStatus.UNHANDLED_REPONSE
+			_current_status = SMTPStatus.UNHANDLED_REPONSE
 	else:
 		_current_status = SMTPStatus.NO_RESPONSE
+		
 	return _current_status
 
 
-func parse_packet_in(strcompare):
+func parse_packet_in(strcompare : String):
 	if strcompare == "":
 		return OK
-	if _packet_in.left(strcompare.length())==strcompare:
-		return OK
+		
+	var slicecount : int = _packet_in.get_slice_count("\r\n")
+
+	if slicecount <= 1:
+		if _packet_in.left(strcompare.length()) == strcompare:
+			return OK
+		else:
+			return FAILED
 	else:
-		return FAILED
+		var ll : String = _packet_in.get_slice("\r\n", slicecount - 2)
+		if ll.left(strcompare.length()) == strcompare:
+			return OK
+		else:
+			return FAILED
 
 func mail_hello():
 	var r_code : int = send("HELO", client_address)
 	wait_answer()
 	r_code= send("EHLO", client_address)
 	r_code= wait_answer("250")
+	return r_code
+
+func mail_starttls():
+	var r_code : int = send("STARTTLS")
+	r_code = wait_answer("220") #220 TLS go ahead
+	
+	if r_code != OK:
+		return r_code
+	
+	_socket_original = _socket
+	
+	_socket = StreamPeerSSL.new()
+	_socket.connect_to_stream(_socket_original, true, server)
+		
+	for i in range(max_retries):
+		print("STARTTLS RETRIES" + str(_socket.get_status()))
+		
+		if _socket.get_status() == _socket.STATUS_ERROR:
+			display("Error while requesting connection")
+			return _socket.get_status()
+			
+#		elif _socket.get_status() == _socket.STATUS_CONNECTING:
+#			d.display("connecting...")
+#			break
+	
+		if _socket.get_status() == _socket.STATUS_CONNECTED:
+			display("STARTTLS connection up")
+			print("STARTTLS CONNECTED")
+			break
+			
+		OS.delay_msec(delay_time)
+	
 	return r_code
 
 func mail_auth():
@@ -212,20 +270,24 @@ func mail_to(data):
 	return r_code
 	
 
-func mail_data(data=null,from=null,subject=null):
-	var corpo : String = ""
-	for i in data:
-		corpo = corpo + i  + "\r\n"
-	corpo=corpo + "."
-	var r_code=send("DATA") 
+func mail_data(data=null,subject=null):
+	var corpo : String = data
+	corpo += "\r\n.\r\n"
+	
+	var r_code=send("DATA")
 	r_code=wait_answer("354")
-#	if r_code == OK and from != null:
-#		r_code=send("FROM: ",bracket(from))
+	if r_code == OK:
+		r_code=send("FROM: ", email_address_name + " " + bracket(email_address))
+		#r_code =wait_answer("250")
 	if r_code == OK and subject != null:
 		r_code=send("SUBJECT: ",subject)
+		#r_code =wait_answer("250")
 	if r_code == OK and data != null:
 		r_code=send(corpo)
-	r_code =wait_answer("250")
+		#r_code =wait_answer("250")
+		
+	r_code = wait_answer("250")
+	
 	return r_code
 
 func mail_quit():
