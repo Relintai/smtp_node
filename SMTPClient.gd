@@ -14,8 +14,6 @@ var _socket : StreamPeer = null
 var _packet_in : String = ""
 var _packet_out : String = ""
 
-var subject : String = "New message from Godot"
-
 enum SMTPStatus {
 	OK,
 	WAITING,
