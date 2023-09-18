@@ -1,241 +1,238 @@
 extends Node
 
-export var server = "smtp.gmail.com" 
-export var port	= 465
-export var user = ""
-export var password = ""
+export var server : String = "smtp.gmail.com" 
+export var port : int = 465
+export var user : String = ""
+export var password : String = ""
+export var max_retries : int = 5
+export var delay_time : int = 250
+
 export var mymailto = ""
 export var mymail = "mail.smtp.localhost"
 
-enum channel {TCP,PACKET}
-export (channel) var com = channel.TCP
+var _socket_original = null
+var _socket = null
+var _packet_in = ""
+var _packet_out = ""
 
-var Bocket = null
-var Socket = null
-var PacketSocket = null
-var PacketIn = ""
-var PacketOut = ""
+var subject = "New message from Godot"
 
-enum esi {OK,KO}    
+enum SMTPStatus {
+	OK,
+	WAITING,
+	NO_RESPONSE,
+	UNHANDLED_REPONSE
+}
 
-enum stati {OK,WAITING,NO_RESPONSE,UNHANDLED_REPONSE}
-export (stati) var stato
+var _current_status : int = 0
 
-var MaxRetries = 5
-var delayTime = 250
+var thread : Thread = null
 
-var thread = null
-
-var authloginbase64=""
-var authpassbase64=""
+var authloginbase64 : String  = ""
+var authpassbase64 : String = ""
 
 func _ready():
 	if user != "":
-		authloginbase64=Marshalls.raw_to_base64(user.to_ascii())
+		authloginbase64 = Marshalls.raw_to_base64(user.to_ascii())
+		
 	if password != "":
-		authpassbase64=Marshalls.raw_to_base64(password.to_ascii())
+		authpassbase64 = Marshalls.raw_to_base64(password.to_ascii())
   
-
-func Deliver(data):
+func deliver(data):
 	thread = Thread.new()
-	thread.start(self,"ThreadDeliver",data)
+	thread.start(self,"thread_deliver",data)
 
-
-# If you want to debug the program, this is where you start
-# I made a miniscule change to this function, which was actually extremely hard, and took a few days.
-func ThreadDeliver(data):
+func thread_deliver(data):
 	var r_code
-	r_code = OpenSocket()
+	r_code = Open_socket()
 	if r_code == OK:
-		r_code =WaitAnswer()
+		r_code = wait_answer()
 #	if r_code == OK:
 #		emit_signal("SMTP_connected")
 #		r_code = send("ciao") # needed because some SMTP servers return error each first command
 	if r_code == OK:
-		r_code = MAILhello()
+		r_code = mail_hello()
 	if r_code == OK:
 		print("SMTP_working")
-		CloseSocket()
+		close_socket()
 		return
-		r_code = MAILauth()
+		r_code = mail_auth()
 	if r_code == OK:
-		r_code = MAILfrom(mymail)
+		r_code = mail_from(mymail)
 	if r_code == OK:
-		r_code = MAILto(mymailto)
+		r_code = mail_to(mymailto)
 	if r_code == OK:
-		r_code = MAILdata(data,mymail,subject)
+		r_code = mail_data(data,mymail,subject)
 	if r_code == OK:
 		print("process OK")
 	if r_code == OK:
-		r_code =MAILquit()
-	CloseSocket()
+		r_code = mail_quit()
+	close_socket()
 	if r_code == OK:
 		display("All done")
 	else:
-
 		display("ERROR " + str(r_code))
 	return r_code
 
 
-func OpenSocket():
-	var error
+func Open_socket():
+	var error : int
 
-	if Bocket == null:
-		Bocket=StreamPeerTCP.new()
-		error=Bocket.connect_to_host(server,port)
-		Socket = StreamPeerSSL.new()
-		Socket.connect_to_stream(Bocket, true, server)
+	if _socket_original == null:
+		_socket_original = StreamPeerTCP.new()
+		error = _socket_original.connect_to_host(server,port)
+		
+		_socket = StreamPeerSSL.new()
+		_socket.connect_to_stream(_socket_original, true, server)
 
 	display(["connecting server...",server,error])
 
 	if error > 0:
 		var ip=IP.resolve_hostname(server)
-		error=Socket.connect_to_host(ip,port)
+		error=_socket.connect_to_host(ip,port)
 		display(["trying IP ...",ip,error])
 
-	for i in range(1,MaxRetries):
-		print("asdasd" + str(Socket.get_status()))
+	for i in range(1,max_retries):
+		print("RETRIES" + str(_socket.get_status()))
 		
-#		if Socket.get_status() == Socket.STATUS_ERROR:
+#		if _socket.get_status() == _socket.STATUS_ERROR:
 #			d.display("Error while requesting connection")
 #			break
-#		elif Socket.get_status() == Socket.STATUS_CONNECTING:
+#		elif _socket.get_status() == _socket.STATUS_CONNECTING:
 #			d.display("connecting...")
 #			break
 
-		if Socket.get_status() == Socket.STATUS_CONNECTED:
+		if _socket.get_status() == _socket.STATUS_CONNECTED:
 			display("connection up")
 			print("CONNECTED")
 			break
 			
-		OS.delay_msec(delayTime)
+		OS.delay_msec(delay_time)
 		
 	return error
 
-func CloseSocket():
-	Bocket.disconnect_from_host()
+func close_socket():
+	_socket_original.disconnect_from_host()
 
 func send(data1,data2=null,data3=null):
 	var error
-	error = sendOnly(data1,data2,data3)
+	error = send_only(data1,data2,data3)
 	return error
 
-func sendOnly(data1,data2=null,data3=null):
+func send_only(data1,data2=null,data3=null):
 	var error = 0
-	PacketOut = data1
+	_packet_out = data1
 	if data2 != null:
-		PacketOut = PacketOut + " " + data2
+		_packet_out = _packet_out + " " + data2
 	if data3 != null:
-		PacketOut = PacketOut + " " + data3
-	display(["send",PacketOut])
-	PacketOut = PacketOut + "\n"
+		_packet_out = _packet_out + " " + data3
+	display(["send",_packet_out])
+	_packet_out = _packet_out + "\n"
 
-	if com == channel.TCP:
-		error=Socket.put_data(PacketOut.to_utf8())
-		if error == null:
-			error = "NULL"
+	error=_socket.put_data(_packet_out.to_utf8())
+	if error == null:
+		error = "NULL"
+		
 	display(["send","r_code",error])
+	
 	return error
 
-func WaitAnswer(succesful=""):
-	stato= stati.WAITING
+func wait_answer(succesful=""):
+	_current_status= SMTPStatus.WAITING
 	display(["waiting response from server..."])
-	if com == channel.TCP:
-		PacketIn = ""
-		OS.delay_msec(delayTime)
-		for i in range(1,MaxRetries):
-			Socket.poll()
-			var bufLen = Socket.get_available_bytes()
-			if bufLen > 0:
-				display(["bytes buffered",String(bufLen)])
-				PacketIn=PacketIn + Socket.get_utf8_string(bufLen)
-				display(["receive",PacketIn])
-				
-				break
-			else:
-				OS.delay_msec(delayTime)
-		if PacketIn != "":
-			stato= stati.OK
-			if ParsePacketIn(succesful) != OK:
-				stato=stati.UNHANDLED_REPONSE
-		else:
-			stato = stati.NO_RESPONSE
-		return stato
-	else:
-		return 99
 
-func ParsePacketIn(strcompare):
+	_packet_in = ""
+	OS.delay_msec(delay_time)
+	for i in range(1,max_retries):
+		_socket.poll()
+		var bufLen = _socket.get_available_bytes()
+		if bufLen > 0:
+			display(["bytes buffered",String(bufLen)])
+			_packet_in=_packet_in + _socket.get_utf8_string(bufLen)
+			display(["receive",_packet_in])
+			
+			break
+		else:
+			OS.delay_msec(delay_time)
+	if _packet_in != "":
+		_current_status= SMTPStatus.OK
+		if parse_packet_in(succesful) != OK:
+			_current_status=SMTPStatus.UNHANDLED_REPONSE
+	else:
+		_current_status = SMTPStatus.NO_RESPONSE
+	return _current_status
+
+
+func parse_packet_in(strcompare):
 	if strcompare == "":
 		return OK
-	if PacketIn.left(strcompare.length())==strcompare:
+	if _packet_in.left(strcompare.length())==strcompare:
 		return OK
 	else:
 		return FAILED
 
-func MAILhello():
+func mail_hello():
 	var r_code=send("HELO", mymail)
-	WaitAnswer()
+	wait_answer()
 	r_code= send("EHLO", mymail)
-	r_code= WaitAnswer("250")
+	r_code= wait_answer("250")
 	return r_code
 
-# the MAILauth() function was broken, I fixed it, you're welcome
-func MAILauth():
+# the mail_auth() function was broken, I fixed it, you're welcome
+func mail_auth():
 	var r_code=send("AUTH LOGIN")
-	r_code=WaitAnswer("334")
+	r_code=wait_answer("334")
 	
-	#print("MAILauth()  , AUTH LOGIN ", r_code) 
+	#print("mail_auth()  , AUTH LOGIN ", r_code) 
 	# when debugging, add print statements everywhere you fail to progress.
 
 	if r_code == OK:
 		r_code=send(authloginbase64)
-	r_code = WaitAnswer("334")
-	#print("MAILauth()  , username ", r_code)
+	r_code = wait_answer("334")
+	#print("mail_auth()  , username ", r_code)
 	if r_code == OK:
 		r_code=send(authpassbase64)
-	r_code = WaitAnswer("235")
-	#print("MAILauth()  , password ", r_code)
+		
+	r_code = wait_answer("235")
+	#print("mail_auth()  , password ", r_code)
 	display(["r_code auth:", r_code])
 	return r_code
 
-func MAILfrom(data):
+func mail_from(data):
 	var r_code=send("MAIL FROM:",bracket(data))
-	r_code = WaitAnswer("250")
+	r_code = wait_answer("250")
 	return r_code
 
-func MAILto(data):
+func mail_to(data):
 	var r_code=send("RCPT TO:",bracket(data))
-	r_code = WaitAnswer("250")
+	r_code = wait_answer("250")
 	return r_code
 	
-var subject = "New message from Godot"
 
-
-func MAILdata(data=null,from=null,subject=null):
+func mail_data(data=null,from=null,subject=null):
 	var corpo = ""
 	for i in data:
 		corpo = corpo + i  + "\r\n"
 	corpo=corpo + "."
 	var r_code=send("DATA") 
-	r_code=WaitAnswer("354")
+	r_code=wait_answer("354")
 #	if r_code == OK and from != null:
 #		r_code=send("FROM: ",bracket(from))
 	if r_code == OK and subject != null:
 		r_code=send("SUBJECT: ",subject)
 	if r_code == OK and data != null:
 		r_code=send(corpo)
-	r_code =WaitAnswer("250")
+	r_code =wait_answer("250")
 	return r_code
 
-func MAILquit():
+func mail_quit():
 	return send("QUIT")
 
 func bracket(data):
 	return "<"+data+">"
 
-
 func _on_Button_pressed() -> void:
-	Deliver("TEST MSG!")
+	deliver("TEST MSG!")
 
 var debug = true
 func display(data):
