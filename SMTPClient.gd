@@ -4,11 +4,10 @@ export(String) var server : String = "smtp.gmail.com"
 export(int) var port : int = 465
 export(String) var user : String = ""
 export(String) var password : String = ""
+export(String) var email_address : String = "mail.smtp.localhost"
+export(String) var client_address : String = "client.example.com"
 export(int) var max_retries : int = 5
 export(int) var delay_time : int = 250
-
-export(String) var mymailto : String = ""
-export(String) var mymail : String = "mail.smtp.localhost"
 
 var _socket_original : StreamPeer = null
 var _socket : StreamPeer = null
@@ -26,30 +25,36 @@ enum SMTPStatus {
 
 var _current_status : int = 0
 
-var thread : Thread = null
+var _thread : Thread = null
 
-var authloginbase64 : String = ""
-var authpassbase64 : String = ""
+var _auth_login_base64 : String = ""
+var _auth_pass_base64 : String = ""
 
 func _ready():
 	if user != "":
-		authloginbase64 = Marshalls.raw_to_base64(user.to_ascii())
+		_auth_login_base64 = Marshalls.raw_to_base64(user.to_ascii())
 		
 	if password != "":
-		authpassbase64 = Marshalls.raw_to_base64(password.to_ascii())
+		_auth_pass_base64 = Marshalls.raw_to_base64(password.to_ascii())
   
-func deliver(data):
-	thread = Thread.new()
-	thread.start(self,"thread_deliver",data)
+func send_mail(address, subject, data):
+	_thread = Thread.new()
+	_thread.start(self, "_thread_deliver", [address, subject, data])
 
-func thread_deliver(data):
+func _thread_deliver(user_data):
+	var address : String = user_data[0]
+	var subject : String = user_data[1]
+	var data : String = user_data[2]
+	
 	var r_code : int
-	r_code = Open_socket()
+	r_code = open_socket()
 	if r_code == OK:
 		r_code = wait_answer()
+		
 #	if r_code == OK:
 #		emit_signal("SMTP_connected")
 #		r_code = send("ciao") # needed because some SMTP servers return error each first command
+
 	if r_code == OK:
 		r_code = mail_hello()
 	if r_code == OK:
@@ -58,11 +63,11 @@ func thread_deliver(data):
 		return
 		r_code = mail_auth()
 	if r_code == OK:
-		r_code = mail_from(mymail)
+		r_code = mail_from(address)
 	if r_code == OK:
-		r_code = mail_to(mymailto)
+		r_code = mail_to(address)
 	if r_code == OK:
-		r_code = mail_data(data,mymail,subject)
+		r_code = mail_data(data, address, subject)
 	if r_code == OK:
 		print("process OK")
 	if r_code == OK:
@@ -75,7 +80,7 @@ func thread_deliver(data):
 	return r_code
 
 
-func Open_socket():
+func open_socket():
 	var error : int
 
 	if _socket_original == null:
@@ -88,7 +93,7 @@ func Open_socket():
 	display(["connecting server...",server,error])
 
 	if error > 0:
-		var ip=IP.resolve_hostname(server)
+		var ip = IP.resolve_hostname(server)
 		error=_socket.connect_to_host(ip,port)
 		display(["trying IP ...",ip,error])
 
@@ -170,30 +175,32 @@ func parse_packet_in(strcompare):
 		return FAILED
 
 func mail_hello():
-	var r_code : int =send("HELO", mymail)
+	var r_code : int = send("HELO", client_address)
 	wait_answer()
-	r_code= send("EHLO", mymail)
+	r_code= send("EHLO", client_address)
 	r_code= wait_answer("250")
 	return r_code
 
-# the mail_auth() function was broken, I fixed it, you're welcome
 func mail_auth():
 	var r_code : int =send("AUTH LOGIN")
 	r_code=wait_answer("334")
 	
 	#print("mail_auth()  , AUTH LOGIN ", r_code) 
-	# when debugging, add print statements everywhere you fail to progress.
 
 	if r_code == OK:
-		r_code=send(authloginbase64)
+		r_code=send(_auth_login_base64)
+		
 	r_code = wait_answer("334")
+	
 	#print("mail_auth()  , username ", r_code)
+	
 	if r_code == OK:
-		r_code=send(authpassbase64)
+		r_code=send(_auth_pass_base64)
 		
 	r_code = wait_answer("235")
 	#print("mail_auth()  , password ", r_code)
 	display(["r_code auth:", r_code])
+	
 	return r_code
 
 func mail_from(data):
@@ -230,7 +237,7 @@ func bracket(data):
 	return "<"+data+">"
 
 func _on_Button_pressed() -> void:
-	deliver("TEST MSG!")
+	send_mail("", "TEST SUBJECT", "TEST MSG!")
 
 var debug = true
 func display(data):
