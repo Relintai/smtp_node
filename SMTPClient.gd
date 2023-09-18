@@ -8,9 +8,9 @@ enum SMTPStatus {
 }
 
 enum AuthType {
-	PLAINTEXT,
+	SMTPS,
 	STARTTLS,
-	SMTPS
+	PLAINTEXT,
 }
 
 export(String) var server : String = "smtp.gmail.com"
