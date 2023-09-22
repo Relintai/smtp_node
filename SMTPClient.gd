@@ -13,6 +13,8 @@ enum AuthType {
 	PLAINTEXT, # No SSL
 }
 
+var debug : bool = false
+
 export(String) var smtp_server : String = ""
 export(int) var smtp_server_port : int = 465
 
@@ -362,7 +364,6 @@ func bracket(data):
 func _on_Button_pressed() -> void:
 	send_mail("", "TEST SUBJECT", "TEST MSG!")
 
-var debug = true
 func display(data):
 	if debug == true:
 		print("debug: ",data)
