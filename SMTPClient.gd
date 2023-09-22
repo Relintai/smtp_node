@@ -36,6 +36,11 @@ var _packet_out : String = ""
 var _current_status : int = 0
 
 var _thread : Thread = null
+var _thread_semaphore : Semaphore = Semaphore.new()
+var _thread_running : bool = true
+
+var _mail_queue : Array = Array()
+var _mail_queue_lock : Mutex = Mutex.new()
 
 var _auth_login_base64 : String = ""
 var _auth_pass_base64 : String = ""
@@ -46,10 +51,39 @@ func _ready():
 		
 	if password != "":
 		_auth_pass_base64 = Marshalls.raw_to_base64(password.to_ascii())
-  
-func send_mail(address, subject, data):
+
+func _enter_tree() -> void:
+	_thread_running = true
 	_thread = Thread.new()
-	_thread.start(self, "_thread_deliver", [address, subject, data])
+	_thread.start(self, "_thread_main_loop", null)
+	
+func _exit_tree() -> void:
+	_thread_running = false
+	_thread_semaphore.post()
+	_thread.wait_to_finish()
+	_thread = null
+
+func send_mail(address, subject, data):
+	_mail_queue_lock.lock()
+	_mail_queue.append([address, subject, data])
+	_mail_queue_lock.unlock()
+	
+	_thread_semaphore.post()
+
+func _thread_main_loop(user_data):
+	while _thread_running:
+		_mail_queue_lock.lock()
+		
+		if _mail_queue.size() > 0:
+			var md = _mail_queue.pop_front()
+			_mail_queue_lock.unlock()
+			
+			_thread_deliver(md)
+		else:
+			_mail_queue_lock.unlock()
+		
+		if _mail_queue.size() == 0:
+			_thread_semaphore.wait()
 
 func _thread_deliver(user_data):
 	var address : String = user_data[0]
