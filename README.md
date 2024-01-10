@@ -4,8 +4,9 @@ The original forum post is gone. Also none of the archives seems to have it. So 
 
 So now this repository is read-only.
 
-I recommend looking around for an another implementation. As if this writing I found an another one here: https://github.com/fenix-hub/gdMail
-It's for godot 4, but should be easy to backport if needed. The Pandemonium engine will get a new c++ implementation based on that.
+I recommend looking around for an another implementation. As if this writing I found this one here: https://github.com/fenix-hub/gdMail
+
+It's for godot 4, but should be easy to backport if needed. The Pandemonium engine will get a new c++ implementation (likely based on the link above).
 
 Godot-SMTP-Gmail ported to work with the Pandemonium Engine.
 
