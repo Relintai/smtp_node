@@ -1,5 +1,12 @@
 # SMTP Node
 
+The original forum post is gone. Also none of the archives seems to have it. So the license for the original code is unknown. Which it turns out is an issue.
+
+So now this repository is read-only.
+
+I recommend looking around for an another implementation. As if this writing I found an another one here: https://github.com/fenix-hub/gdMail
+It's for godot 4, but should be easy to backport if needed. The Pandemonium engine will get a new c++ implementation based on that.
+
 Godot-SMTP-Gmail ported to work with the Pandemonium Engine.
 
 # Original README:
